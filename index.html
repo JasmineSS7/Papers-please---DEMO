@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital, Please</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap');
+
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-bg: #2a2c26;
+            --paper-bg: #d4d0c4;
+            --text-dark: #111;
+            --text-light: #a3a893;
+            --highlight: #4a5c43;
+            --alert: #8b2323;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            font-family: 'Courier Prime', monospace;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* CRT Effect */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 50;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 1024px;
+            height: 100%;
+            max-height: 768px;
+            background-color: var(--panel-bg);
+            position: relative;
+            border: 4px solid #444;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        /* UI Elements */
+        .retro-border {
+            border: 2px solid var(--text-light);
+        }
+        
+        .paper {
+            background-color: var(--paper-bg);
+            color: var(--text-dark);
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .btn {
+            background-color: var(--highlight);
+            color: var(--paper-bg);
+            border: 2px solid var(--text-light);
+            padding: 8px 16px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+
+        .btn:hover {
+            background-color: var(--text-light);
+            color: var(--panel-bg);
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px);
+        }
+
+        .btn-red {
+            background-color: var(--alert);
+        }
+        .btn-red:hover {
+            background-color: #ff4444;
+        }
+
+        /* Folders for Phase 1 */
+        .folder {
+            position: absolute;
+            width: 120px;
+            height: 80px;
+            background-color: #8c7353;
+            border: 1px solid #333;
+            cursor: pointer;
+            border-radius: 4px 15px 4px 4px;
+        }
+        .folder::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 0;
+            width: 50px;
+            height: 10px;
+            background-color: #8c7353;
+            border: 1px solid #333;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+        }
+
+        /* Screen Management */
+        .screen { display: none; height: 100%; width: 100%; flex-direction: column; }
+        .active-screen { display: flex; }
+
+        /* Productivity Bar */
+        #prod-bar-container {
+            width: 200px;
+            height: 20px;
+            background: #111;
+            border: 1px solid var(--text-light);
+            position: relative;
+        }
+        #prod-bar {
+            height: 100%;
+            background: var(--alert);
+            width: 10%;
+            transition: width 0.5s ease, background-color 0.5s ease;
+        }
+
+        /* Stamps */
+        .stamp {
+            position: absolute;
+            font-size: 2rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            border: 4px solid;
+            padding: 0.25rem 1rem;
+            transform: rotate(-15deg);
+            opacity: 0.8;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+        }
+        .stamp-approved { color: #2e7d32; border-color: #2e7d32; }
+        .stamp-denied { color: #c62828; border-color: #c62828; }
+
+        /* Modal */
+        .modal-overlay {
+            position: absolute; top:0; left:0; right:0; bottom:0;
+            background: rgba(0,0,0,0.8);
+            display: none; justify-content: center; align-items: center;
+            z-index: 100;
+        }
+        
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 9999;
+            position: absolute;
+            pointer-events: none;
+            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(255,255,255,0.1) 50%, rgba(0,0,0,0) 100%);
+            opacity: 0.1;
+            animation: scanline 8s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { top: -100px; }
+            100% { top: 100%; }
+        }
+    </style>
+</head>
+<body class="crt">
+    <div class="scanline"></div>
+    <div id="game-container">
+        
+        <!-- Header (Always visible during gameplay) -->
+        <header id="game-header" class="hidden flex justify-between items-center p-2 border-b-2 retro-border bg-[#1a1c18]">
+            <div>
+                <span id="game-date" class="font-bold">DAY 1</span> | 
+                TIME: <span id="game-time" class="text-red-400">08:00</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span>PRODUCTIVITY:</span>
+                <div id="prod-bar-container">
+                    <div id="prod-bar" style="width: 0%; background-color: #f44336;"></div>
+                </div>
+                <span id="prod-text">0%</span>
+            </div>
+        </header>
+
+        <!-- DAY TRANSITION SCREEN -->
+        <div id="screen-transition" class="screen justify-center items-center bg-[#111] z-40">
+            <div class="text-center max-w-2xl px-4 p-8 retro-border bg-black">
+                <h2 id="trans-title" class="text-6xl font-bold text-white mb-2 tracking-widest">DAY 1</h2>
+                <p id="trans-subtitle" class="text-2xl text-gray-400 mb-6">THE PHYSICAL ERA</p>
+                <p id="trans-desc" class="text-lg text-[#a3a893] mb-8 min-h-[60px] whitespace-pre-wrap"></p>
+                <button id="trans-btn" class="btn text-xl px-8 py-3">START</button>
+            </div>
+        </div>
+
+        <!-- START SCREEN -->
+        <div id="screen-start" class="screen active-screen justify-center items-center bg-[#1a1a1a]">
+            <h1 class="text-6xl mb-4 font-bold text-center tracking-widest text-[#a3a893]">DIGITAL, PLEASE</h1>
+            <p class="mb-8 text-center max-w-md">Glory to the Municipality.<br><br>You are a general worker. Your duty is to process documents accurately and securely. The transition is coming.</p>
+            <button class="btn text-2xl" onclick="initDay(1)">BEGIN SHIFT</button>
+        </div>
+
+        <!-- PHASE 1: PRE-DIGITAL -->
+        <div id="screen-phase1" class="screen relative bg-[#3d3326]">
+            <div class="absolute top-4 left-4 right-4 bg-[#111] p-4 retro-border text-center z-10 shadow-lg">
+                <h2 class="text-xl font-bold text-red-400 blink">URGENT REQUEST FROM MANAGER</h2>
+                <p>The clients are waiting! Find the "Smith Contract" physical folder IMMEDIATELY!</p>
+            </div>
+            <div id="folder-desk" class="relative w-full h-full mt-24">
+                <!-- Folders generated by JS -->
+            </div>
+            <div id="phase1-msg" class="absolute hidden top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white text-black font-bold p-8 text-2xl retro-border z-20 text-center whitespace-pre-wrap">
+                Just old receipts...
+            </div>
+        </div>
+
+        <!-- PHASE 2: DIGITAL TRANSITION -->
+        <div id="screen-phase2" class="screen bg-[#2a2c26] p-4 flex-col items-center">
+            <div class="w-full bg-[#111] p-4 retro-border text-center mb-8 mt-12">
+                <h2 class="text-xl font-bold text-green-400">MUNI-OS v1.0 INSTALLED</h2>
+                <p>Welcome to the digital age. All documents have been scanned.</p>
+                <p class="text-yellow-400 mt-2">TASK: Find the "Smith Contract".</p>
+                <p class="text-gray-400 text-sm italic">Hint: Use the new search software.</p>
+            </div>
+
+            <div class="w-full max-w-2xl bg-[#1a1c18] p-8 retro-border flex flex-col items-center">
+                <div class="text-2xl mb-4">DOCUMENT SEARCH SYSTEM</div>
+                <input type="text" id="search-input" class="w-full bg-black text-green-400 p-2 retro-border focus:outline-none focus:border-green-400 mb-4" placeholder="Enter keywords (e.g., 'Smith')...">
+                <button class="btn w-full" onclick="performSearch()">SEARCH DATABASE</button>
+                
+                <div id="search-results" class="w-full mt-6 hidden">
+                    <div class="paper p-4 retro-border cursor-pointer hover:bg-gray-300 transition-colors" onclick="completePhase2()">
+                        <h3 class="font-bold border-b border-black mb-2">FILE: Smith_Contract.pdf</h3>
+                        <p class="text-sm">Finalized agreement between the Municipality and Smith Corp...</p>
+                    </div>
+                </div>
+                <div id="search-error" class="w-full mt-6 hidden text-red-400 text-center">
+                    NO RESULTS FOUND. TRY DIFFERENT KEYWORDS.
+                </div>
+            </div>
+        </div>
+
+        <!-- PHASE 3: SECURITY & SORTING -->
+        <div id="screen-phase3" class="screen flex-row">
+            <!-- Left Panel: Inbox -->
+            <div class="w-1/3 border-r-2 retro-border bg-[#1a1c18] flex flex-col">
+                <div class="p-2 border-b-2 retro-border font-bold bg-[#111]">INBOX (<span id="inbox-count">0</span>)</div>
+                <div id="inbox-list" class="flex-1 overflow-y-auto p-2 flex flex-col gap-2">
+                    <!-- Inbox items -->
+                </div>
+            </div>
+
+            <!-- Right Panel: Work Area -->
+            <div class="w-2/3 flex flex-col bg-[#2a2c26] relative">
+                <!-- Viewer -->
+                <div class="flex-1 p-8 flex justify-center items-center bg-[#1a1a1a]">
+                    <div id="doc-viewer" class="paper w-full max-w-lg h-full max-h-[500px] p-6 relative hidden flex-col">
+                        <div id="stamp-mark" class="stamp"></div>
+                        <h2 id="doc-title" class="font-bold text-xl border-b-2 border-black pb-2 mb-4 text-center">TITLE</h2>
+                        <div id="doc-meta" class="text-sm mb-4 text-gray-600 flex justify-between">
+                            <span id="doc-from">From: ---</span>
+                            <span id="doc-date">Date: ---</span>
+                        </div>
+                        <div id="doc-body" class="flex-1 overflow-y-auto font-serif text-sm leading-relaxed whitespace-pre-wrap">BODY TEXT</div>
+                    </div>
+                    <div id="no-doc-msg" class="text-gray-500">SELECT A DOCUMENT FROM INBOX</div>
+                </div>
+
+                <!-- Actions -->
+                <div id="action-panel" class="h-32 border-t-2 retro-border bg-[#111] p-4 flex gap-8 justify-center items-center hidden">
+                    <button class="btn flex-1 text-xl py-4 bg-green-800 hover:bg-green-700" onclick="processDoc('APPROVE')">APPROVE<br><span class="text-sm text-gray-300">(Share)</span></button>
+                    <button class="btn flex-1 text-xl py-4 btn-red" onclick="processDoc('REJECT')">REJECT<br><span class="text-sm text-gray-300">(Flag)</span></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODALS -->
+        <!-- Manager Scold / Praise -->
+        <div id="modal-manager" class="modal-overlay">
+            <div class="bg-blue-900 p-8 retro-border border-blue-400 text-center max-w-md shadow-2xl">
+                <h2 class="text-2xl font-bold text-yellow-300 mb-2">INCOMING MESSAGE: MANAGER</h2>
+                <div class="bg-black p-4 mb-4 text-left text-white font-mono text-sm" id="manager-text">
+                    <!-- Dynamic text -->
+                </div>
+                <button id="manager-btn" class="btn" onclick="closeManager()">UNDERSTOOD</button>
+            </div>
+        </div>
+
+        <!-- Jail / Game Over -->
+        <div id="modal-jail" class="modal-overlay bg-red-900 bg-opacity-90">
+            <div class="bg-black p-8 retro-border border-red-500 text-center max-w-md">
+                <h2 class="text-4xl font-bold text-red-600 mb-4 blink">SECURITY BREACH</h2>
+                <p class="mb-4 text-white text-lg" id="jail-text">You shared highly confidential information.</p>
+                <p class="mb-6 text-gray-400">The authorities have been notified. You are going to jail for violating data privacy laws.</p>
+                <button class="btn-red" onclick="location.reload()">SERVE SENTENCE (RESTART)</button>
+            </div>
+        </div>
+
+        <!-- Game Complete -->
+        <div id="modal-win" class="modal-overlay">
+            <div class="bg-[#111] p-8 retro-border text-center max-w-md">
+                <h2 class="text-3xl font-bold text-green-500 mb-4">SHIFT COMPLETE</h2>
+                <p class="mb-4 text-lg">You have successfully navigated the digital transition and secured our data.</p>
+                <p class="mb-6 text-gray-400" id="final-score">Final Productivity: 100%</p>
+                <button class="btn" onclick="location.reload()">PLAY AGAIN</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /* --- STATE --- */
+        let productivity = 0;
+        let phase1Timer = 10;
+        let phase1Interval = null;
+        
+        let currentDocIndex = 0;
+        let currentDoc = null;
+        let currentDayNum = 1;
+        let managerCallback = null;
+
+        const docsQueue = [
+            {
+                id: "D-001",
+                title: "Routine Municipality Report",
+                from: "Dept of Public Works",
+                date: "NOV 06, 2026",
+                body: "Monthly summary of road maintenance and street sweeping activities. No anomalies detected. Approved for public release.",
+                correctAction: "APPROVE",
+                errorMsg: "This is a routine public report. Why are you flagging it? It needs to be shared!"
+            },
+            {
+                id: "E-993",
+                title: "URGENT: Click here to reset your password",
+                from: "adm1n@mun1cipality.com",
+                date: "NOV 06, 2026",
+                body: "Dear User,\n\nYour password expires in 2 hours. Click the link below to verify your credentials immediately:\n\nhttp://mun1cipality-update.com/login",
+                correctAction: "REJECT",
+                errorMsg: "You approved a phishing link! Look at the sender address 'adm1n'! Always flag these! Pay docked!"
+            },
+            {
+                id: "D-004",
+                title: "Citizen Tax Records & SSN attached",
+                from: "Revenue Dept",
+                date: "NOV 06, 2026",
+                body: "CONFIDENTIAL\n\nContains Social Security Numbers, tax history, and banking details for 50 citizens.\n\n1. John Smith (SSN: ***-**-1234)\n2. Jane Doe (SSN: ***-**-5678)\n...[DATA TRUNCATED]",
+                correctAction: "REJECT",
+                isFatal: true,
+                fatalMsg: "You shared sensitive personal info outside the secure network. The municipality is facing a massive lawsuit, and you are going to jail."
+            }
+        ];
+
+        /* --- UTILS --- */
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+            document.getElementById(id).classList.add('active-screen');
+        }
+        
+        function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function hideModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function updateProductivity(val) {
+            productivity = val;
+            const bar = document.getElementById('prod-bar');
+            bar.style.width = productivity + '%';
+            document.getElementById('prod-text').innerText = productivity + '%';
+
+            if(productivity > 75) bar.style.backgroundColor = '#4caf50';
+            else if(productivity > 40) bar.style.backgroundColor = '#ff9800';
+            else bar.style.backgroundColor = '#f44336';
+        }
+
+        /* --- DAY TRANSITIONS --- */
+        function initDay(dayNum) {
+            currentDayNum = dayNum;
+            const title = document.getElementById('trans-title');
+            const subtitle = document.getElementById('trans-subtitle');
+            const desc = document.getElementById('trans-desc');
+            const btn = document.getElementById('trans-btn');
+
+            if(dayNum === 1) {
+                title.innerText = "DAY 1";
+                subtitle.innerText = "THE PHYSICAL ERA";
+                desc.innerText = "The office is a mess. Find files manually.";
+                btn.onclick = startDay1;
+            } else if (dayNum === 2) {
+                title.innerText = "DAY 2";
+                subtitle.innerText = "THE DIGITAL TRANSITION";
+                desc.innerText = "Overnight, the company digitized all documents. Welcome to the new software.";
+                btn.onclick = startDay2;
+            } else if (dayNum === 3) {
+                title.innerText = "DAY 3";
+                subtitle.innerText = "SECURITY & COMPLIANCE";
+                desc.innerText = "Rule 1: No sharing highly confidential info.\nRule 2: Watch out for phishing emails.";
+                btn.onclick = startDay3;
+            }
+
+            showScreen('screen-transition');
+        }
+
+        function showDayEnd(dayNum, prodScore) {
+            updateProductivity(prodScore);
+            const title = document.getElementById('trans-title');
+            const subtitle = document.getElementById('trans-subtitle');
+            const desc = document.getElementById('trans-desc');
+            const btn = document.getElementById('trans-btn');
+
+            title.innerText = `END OF DAY ${dayNum}`;
+            subtitle.innerText = `PRODUCTIVITY: ${prodScore}%`;
+            desc.innerText = "";
+            btn.innerText = "NEXT DAY";
+            btn.onclick = () => initDay(dayNum + 1);
+
+            showScreen('screen-transition');
+        }
+
+        function showManagerMsg(msg, callback, isPraise = false) {
+            document.getElementById('manager-text').innerText = `> ${msg}`;
+            if(isPraise) {
+                document.getElementById('manager-text').classList.add('text-green-400');
+                document.getElementById('manager-text').classList.remove('text-white');
+            } else {
+                document.getElementById('manager-text').classList.add('text-white');
+                document.getElementById('manager-text').classList.remove('text-green-400');
+            }
+            managerCallback = callback;
+            showModal('modal-manager');
+        }
+
+        function closeManager() {
+            hideModal('modal-manager');
+            if(managerCallback) managerCallback();
+        }
+
+        function startDay1() {
+            showScreen('screen-phase1');
+            document.getElementById('game-header').classList.remove('hidden');
+            document.getElementById('game-date').innerText = 'DAY 1';
+            updateProductivity(0); 
+            
+            const desk = document.getElementById('folder-desk');
+            desk.innerHTML = '';
+            for(let i=0; i<40; i++) {
+                const folder = document.createElement('div');
+                folder.className = 'folder';
+                folder.style.left = Math.random() * 85 + '%';
+                folder.style.top = Math.random() * 75 + '%';
+                folder.style.transform = `rotate(${Math.random() * 90 - 45}deg)`;
+                
+                // Add paper sticking out
+                const paper = document.createElement('div');
+                paper.style.position = 'absolute';
+                paper.style.backgroundColor = '#d4d0c4';
+                paper.style.width = '90%';
+                paper.style.height = '70%';
+                paper.style.top = '-10px';
+                paper.style.left = '5%';
+                paper.style.zIndex = '-1';
+                paper.style.border = '1px solid #999';
+                folder.appendChild(paper);
+
+                folder.onclick = () => {
+                    const msg = document.getElementById('phase1-msg');
+                    msg.classList.remove('hidden');
+                    const excuses = [
+                        "Wrong folder...\n(Tax 1992)", 
+                        "Just old receipts...", 
+                        "Blank paper...", 
+                        "Not the Smith Contract!",
+                        "Where is it?!"
+                    ];
+                    msg.innerText = excuses[Math.floor(Math.random()*excuses.length)];
+                    setTimeout(() => msg.classList.add('hidden'), 800);
+                };
+                desk.appendChild(folder);
+            }
+
+            // Timer
+            phase1Timer = 10;
+            document.getElementById('game-time').innerText = '10 SECONDS';
+            phase1Interval = setInterval(() => {
+                phase1Timer--;
+                document.getElementById('game-time').innerText = `${phase1Timer} SECONDS`;
+                if(phase1Timer <= 3) document.getElementById('game-time').classList.add('blink');
+                
+                if(phase1Timer <= 0) {
+                    clearInterval(phase1Interval);
+                    document.getElementById('game-time').classList.remove('blink');
+                    document.getElementById('game-time').innerText = '00:00';
+                    showManagerMsg("You were too slow! The clients left and the deal is canceled. Unacceptable!", () => {
+                        showDayEnd(1, 0);
+                    });
+                }
+            }, 1000);
+        }
+
+        /* --- DAY 2 LOGIC --- */
+        function startDay2() {
+            showScreen('screen-phase2');
+            document.getElementById('game-date').innerText = 'DAY 2';
+            document.getElementById('game-time').innerText = '15 SECONDS';
+            document.getElementById('search-input').value = '';
+            document.getElementById('search-results').classList.add('hidden');
+            updateProductivity(0);
+
+            // Timer
+            let phase2Timer = 15;
+            let phase2Interval = setInterval(() => {
+                phase2Timer--;
+                document.getElementById('game-time').innerText = `${phase2Timer} SECONDS`;
+                if(phase2Timer <= 0) {
+                    clearInterval(phase2Interval);
+                    completePhase2(); // Force complete if somehow they didn't
+                }
+            }, 1000);
+
+            window.currentPhase2Interval = phase2Interval;
+        }
+
+        function performSearch() {
+            const input = document.getElementById('search-input').value.toLowerCase();
+            const results = document.getElementById('search-results');
+            const err = document.getElementById('search-error');
+            
+            if(input.includes('smith') || input.includes('contract')) {
+                results.classList.remove('hidden');
+                err.classList.add('hidden');
+            } else {
+                results.classList.add('hidden');
+                err.classList.remove('hidden');
+            }
+        }
+
+        function completePhase2() {
+            if(window.currentPhase2Interval) clearInterval(window.currentPhase2Interval);
+            document.getElementById('game-time').innerText = '00:00';
+            
+            showManagerMsg("Excellent work. So fast! The digital system is a massive upgrade.", () => {
+                showDayEnd(2, 100);
+            }, true);
+        }
+
+        /* --- DAY 3 LOGIC --- */
+        function startDay3() {
+            showScreen('screen-phase3');
+            document.getElementById('game-date').innerText = 'DAY 3';
+            document.getElementById('game-time').innerText = 'ACTIVE SHIFT';
+            document.getElementById('game-time').className = "text-green-400";
+            renderInbox();
+        }
+
+        function renderInbox() {
+            const list = document.getElementById('inbox-list');
+            list.innerHTML = '';
+            let pendingCount = 0;
+
+            docsQueue.forEach((doc, index) => {
+                if(index < currentDocIndex) return; // Processed
+                
+                pendingCount++;
+                const item = document.createElement('div');
+                item.className = `p-2 border border-gray-600 cursor-pointer hover:bg-gray-700 ${index === currentDocIndex ? 'bg-[#3a3c36] border-green-500' : 'bg-[#222]'}`;
+                item.innerHTML = `<div class="font-bold text-sm truncate">${doc.id}</div><div class="text-xs text-gray-400 truncate">${doc.title}</div>`;
+                
+                if(index === currentDocIndex) {
+                    item.onclick = () => loadDocument(doc);
+                } else {
+                    item.style.opacity = '0.5';
+                    item.onclick = null;
+                }
+                list.appendChild(item);
+            });
+
+            document.getElementById('inbox-count').innerText = pendingCount;
+            
+            if(pendingCount === 0) {
+                // Win game
+                document.getElementById('final-score').innerText = `Final Productivity Score: ${productivity}%`;
+                showModal('modal-win');
+            } else {
+                loadDocument(docsQueue[currentDocIndex]);
+            }
+        }
+
+        function loadDocument(doc) {
+            currentDoc = doc;
+            document.getElementById('no-doc-msg').classList.add('hidden');
+            const viewer = document.getElementById('doc-viewer');
+            viewer.classList.remove('hidden');
+            viewer.classList.add('flex');
+            
+            document.getElementById('action-panel').classList.remove('hidden');
+            
+            document.getElementById('doc-title').innerText = doc.title;
+            document.getElementById('doc-from').innerText = `From: ${doc.from}`;
+            document.getElementById('doc-date').innerText = `Date: ${doc.date}`;
+            document.getElementById('doc-body').innerText = doc.body;
+
+            // Reset stamp
+            const stamp = document.getElementById('stamp-mark');
+            stamp.style.display = 'none';
+            stamp.className = 'stamp';
+        }
+
+        function processDoc(action) {
+            if(!currentDoc) return;
+            
+            const isCorrect = (action === currentDoc.correctAction);
+            const stamp = document.getElementById('stamp-mark');
+            
+            // Visual Stamp
+            stamp.style.display = 'block';
+            stamp.innerText = action;
+            if(isCorrect) {
+                stamp.classList.add('stamp-approved');
+                // No penalty, keeps productivity
+                setTimeout(() => nextDocument(), 800);
+            } else {
+                stamp.classList.add('stamp-denied');
+                updateProductivity(productivity - 30); // dock points
+                
+                // Check Fail states
+                if(currentDoc.isFatal && action === 'APPROVE') { 
+                    setTimeout(() => triggerJail(currentDoc.fatalMsg), 800);
+                } else {
+                    setTimeout(() => showManagerMsg(currentDoc.errorMsg, () => {
+                        // Allow retry after scolding
+                        stamp.style.display = 'none';
+                        stamp.className = 'stamp';
+                    }), 800);
+                }
+            }
+        }
+
+        function triggerJail(msg) {
+            document.getElementById('jail-text').innerText = msg;
+            showModal('modal-jail');
+        }
+
+        function nextDocument() {
+            currentDocIndex++;
+            currentDoc = null;
+            document.getElementById('doc-viewer').classList.add('hidden');
+            document.getElementById('doc-viewer').classList.remove('flex');
+            document.getElementById('action-panel').classList.add('hidden');
+            document.getElementById('no-doc-msg').classList.remove('hidden');
+
+            renderInbox();
+        }
+
+    </script>
+</body>
+</html>
